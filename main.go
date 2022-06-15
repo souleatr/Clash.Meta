@@ -24,7 +24,6 @@ var (
 	flagset            map[string]bool
 	version            bool
 	testConfig         bool
-	geodataMode        bool
 	homeDir            string
 	configFile         string
 	externalUI         string
@@ -38,7 +37,6 @@ func init() {
 	flag.StringVar(&externalUI, "ext-ui", "", "override external ui directory")
 	flag.StringVar(&externalController, "ext-ctl", "", "override external controller address")
 	flag.StringVar(&secret, "secret", "", "override secret for RESTful API")
-	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of clash")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
 	flag.Parse()
@@ -78,10 +76,6 @@ func main() {
 	} else {
 		configFile = filepath.Join(C.Path.HomeDir(), C.Path.Config())
 		C.SetConfig(configFile)
-	}
-
-	if geodataMode {
-		C.GeodataMode = true
 	}
 
 	if err := config.Init(C.Path.HomeDir()); err != nil {

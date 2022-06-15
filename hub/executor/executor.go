@@ -26,7 +26,6 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
-	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -85,7 +84,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
-	updateIPTables(cfg)
 	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 
@@ -381,69 +379,8 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func updateIPTables(cfg *config.Config) {
-	tproxy.CleanupTProxyIPTables()
-
-	iptables := cfg.IPTables
-	if runtime.GOOS != "linux" || !iptables.Enable {
-		return
-	}
-
-	var err error
-	defer func() {
-		if err != nil {
-			log.Errorln("[IPTABLES] setting iptables failed: %s", err.Error())
-			os.Exit(2)
-		}
-	}()
-
-	if cfg.Tun.Enable {
-		err = fmt.Errorf("when tun is enabled, iptables cannot be set automatically")
-		return
-	}
-
-	var (
-		inboundInterface = "lo"
-		bypass           = iptables.Bypass
-		tProxyPort       = cfg.General.TProxyPort
-		dnsCfg           = cfg.DNS
-	)
-
-	if tProxyPort == 0 {
-		err = fmt.Errorf("tproxy-port must be greater than zero")
-		return
-	}
-
-	if !dnsCfg.Enable {
-		err = fmt.Errorf("DNS server must be enable")
-		return
-	}
-
-	dnsPort, err := netip.ParseAddrPort(dnsCfg.Listen)
-	if err != nil {
-		err = fmt.Errorf("DNS server must be correct")
-		return
-	}
-
-	if iptables.InboundInterface != "" {
-		inboundInterface = iptables.InboundInterface
-	}
-
-	if dialer.DefaultRoutingMark.Load() == 0 {
-		dialer.DefaultRoutingMark.Store(2158)
-	}
-
-	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), dnsPort.Port())
-	if err != nil {
-		return
-	}
-
-	log.Infoln("[IPTABLES] Setting iptables completed")
-}
-
 func Shutdown() {
 	P.Cleanup(false)
-	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 
 	log.Warnln("Clash shutting down")
