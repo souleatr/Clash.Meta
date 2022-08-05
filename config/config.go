@@ -252,32 +252,25 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		TCPConcurrent:  false,
 		EnableProcess:  false,
 		DNS: RawDNS{
-			Enable:       false,
+			Enable:       true,
 			IPv6:         false,
 			UseHosts:     true,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "28.0.0.0/8",
 			FallbackFilter: RawFallbackFilter{
-				GeoIP:     true,
-				GeoIPCode: "CN",
+				GeoIP:     false,
+				GeoIPCode: "ID",
 				IPCIDR:    []string{},
 				GeoSite:   []string{},
 			},
 			DefaultNameserver: []string{
-				"114.114.114.114",
-				"223.5.5.5",
 				"8.8.8.8",
 				"1.0.0.1",
 			},
 			NameServer: []string{
-				"https://doh.pub/dns-query",
-				"tls://223.5.5.5:853",
+				"8.8.8.8",
 			},
-			FakeIPFilter: []string{
-				"dns.msftnsci.com",
-				"www.msftnsci.com",
-				"www.msftconnecttest.com",
-			},
+			FakeIPFilter: []string{},
 		},
 		Sniffer: RawSniffer{
 			Enable:      false,
