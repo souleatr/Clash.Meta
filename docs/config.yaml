@@ -46,13 +46,6 @@ tun:
   # auto-detect-interface: true # 自动识别interface
   # auto-route: true # 配置
 
-#ebpf配置
-ebpf:
-  auto-redir: #redirect模式，仅支持TCP
-    - eth0
-  redirect-to-tun: #UDP+TCP,使用该功能请勿启用auto-route
-    - eth0
-
 # 嗅探域名 可选配置
 sniffer:
   enable: false
@@ -80,6 +73,7 @@ profile:
 dns:
   enable: false # 关闭将使用系统DNS
   listen: 0.0.0.0:53 # 开启DNS服务器监听
+  prefer-h3: false # 启动DOH优先使用http/3
   # ipv6: false # false将返回AAAA的空结果
 
   # 用于解析nameserver,fallbacky以及其他DNS服务器配置的,DNS服务域名
@@ -101,15 +95,13 @@ dns:
   #   - localhost.ptlogin2.qq.com
 
   # DNS主要域名配置
-  # 支持 UDP,TCP,DoT,DoH,DoQ
+  # 支持 UDP,TCP,DOT,DOH,DOQ
   # 这部分为主要DNS配置,影响所有直连,确保使用对大陆解析精准的DNS
   nameserver:
     - 114.114.114.114 # default value
     - 8.8.8.8 # default value
     - tls://223.5.5.5:853 # DNS over TLS
-    - https://doh.pub/dns-query # DNS over HTTPS
-    - https://dns.alidns.com/dns-query#h3=true # 强制HTTP/3
-    - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用HTTP/3
+    - https://1.1.1.1/dns-query # DNS over HTTPS
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - '8.8.8.8#en0' # 兼容指定DNS出口网卡
@@ -287,7 +279,7 @@ proxies:
     # tls: true # https
     # skip-cert-verify: true
     # sni: custom.com
-    # fingerprint: xxxx # 同 experimental.fingerprints 使用 sha256 指纹，配置协议独立的指纹，将忽略 experimental.fingerprints
+    # fingerprint: xxxx
 
   # Snell
   # Beware that there's currently no UDP support yet

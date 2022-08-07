@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"fmt"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tls2 "github.com/Dreamacro/clash/component/tls"
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/http3"
 	D "github.com/miekg/dns"
+	"go.uber.org/atomic"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
@@ -84,57 +85,23 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	return msg, err
 }
 
-func newDoHClient(url string, r *Resolver, params map[string]string, proxyAdapter string) *dohClient {
-	useH3 := params["h3"] == "true"
-	TLCConfig := tlsC.GetDefaultTLSConfig()
-	var transport http.RoundTripper
-	if useH3 {
-		transport = &http3.RoundTripper{
-			Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
-				host, port, err := net.SplitHostPort(addr)
-				if err != nil {
-					return nil, err
-				}
+func newDoHClient(url string, r *Resolver, preferH3 bool, proxyAdapter string) *dohClient {
+	return &dohClient{
+		url:       url,
+		transport: newDohTransport(r, preferH3, proxyAdapter),
+	}
+}
 
-				ip, err := resolver.ResolveIPWithResolver(host, r)
-				if err != nil {
-					return nil, err
-				}
+type dohTransport struct {
+	*http.Transport
+	h3       *http3.RoundTripper
+	preferH3 bool
+	canUseH3 atomic.Bool
+}
 
-				portInt, err := strconv.Atoi(port)
-				if err != nil {
-					return nil, err
-				}
-
-				udpAddr := net.UDPAddr{
-					IP:   net.ParseIP(ip.String()),
-					Port: portInt,
-				}
-
-				var conn net.PacketConn
-				if proxyAdapter == "" {
-					conn, err = dialer.ListenPacket(ctx, "udp", "")
-					if err != nil {
-						return nil, err
-					}
-				} else {
-					if wrapConn, err := dialContextExtra(ctx, proxyAdapter, "udp", ip, port); err == nil {
-						if pc, ok := wrapConn.(*wrapPacketConn); ok {
-							conn = pc
-						} else {
-							return nil, fmt.Errorf("conn isn't wrapPacketConn")
-						}
-					} else {
-						return nil, err
-					}
-				}
-
-				return quic.DialEarlyContext(ctx, conn, &udpAddr, host, tlsCfg, cfg)
-			},
-			TLSClientConfig: TLCConfig,
-		}
-	} else {
-		transport = &http.Transport{
+func newDohTransport(r *Resolver, preferH3 bool, proxyAdapter string) *dohTransport {
+	dohT := &dohTransport{
+		Transport: &http.Transport{
 			ForceAttemptHTTP2: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, err := net.SplitHostPort(addr)
@@ -153,12 +120,83 @@ func newDoHClient(url string, r *Resolver, params map[string]string, proxyAdapte
 					return dialContextExtra(ctx, proxyAdapter, "tcp", ip, port)
 				}
 			},
-			TLSClientConfig: TLCConfig,
+			TLSClientConfig: tls2.GetDefaultTLSConfig(),
+		},
+		preferH3: preferH3,
+	}
+
+	dohT.canUseH3.Store(preferH3)
+	if preferH3 {
+		dohT.h3 = &http3.RoundTripper{
+			Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+
+				ip, err := resolver.ResolveIPWithResolver(host, r)
+				if err != nil {
+					return nil, err
+				}
+				if proxyAdapter == "" {
+					return quic.DialAddrEarlyContext(ctx, net.JoinHostPort(ip.String(), port), tlsCfg, cfg)
+				} else {
+					if conn, err := dialContextExtra(ctx, proxyAdapter, "udp", ip, port); err == nil {
+						portInt, err := strconv.Atoi(port)
+						if err != nil {
+							return nil, err
+						}
+
+						udpAddr := net.UDPAddr{
+							IP:   net.ParseIP(ip.String()),
+							Port: portInt,
+						}
+
+						return quic.DialEarlyContext(ctx, conn.(net.PacketConn), &udpAddr, host, tlsCfg, cfg)
+					} else {
+						return nil, err
+					}
+				}
+			},
+			TLSClientConfig: tls2.GetDefaultTLSConfig(),
 		}
 	}
 
-	return &dohClient{
-		url:       url,
-		transport: transport,
+	return dohT
+}
+
+func (doh *dohTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+	var bodyBytes []byte
+	var h3Err bool
+	var fallbackErr bool
+	defer func() {
+		if doh.preferH3 && h3Err {
+			doh.canUseH3.Store(doh.preferH3 && fallbackErr)
+		}
+	}()
+
+	if req.Body != nil {
+		bodyBytes, err = ioutil.ReadAll(req.Body)
 	}
+
+	req.Body = ioutil.NopCloser(bytes.NewReader(bodyBytes))
+	if doh.preferH3 && doh.canUseH3.Load() {
+		resp, err = doh.h3.RoundTrip(req)
+		h3Err = err != nil
+		if !h3Err {
+			return resp, err
+		} else {
+			req.Body = ioutil.NopCloser(bytes.NewReader(bodyBytes))
+		}
+	}
+
+	resp, err = doh.Transport.RoundTrip(req)
+	fallbackErr = err != nil
+	if fallbackErr {
+		return resp, err
+	}
+
+	return resp, err
 }
