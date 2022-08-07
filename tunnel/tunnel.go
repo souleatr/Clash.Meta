@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -39,7 +38,7 @@ var (
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
-
+	procesCache string
 	alwaysFindProcess = false
 )
 
@@ -374,13 +373,13 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
 	var resolved bool
+	var processFound bool
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
 		metadata.DstIP = node.Data
 		resolved = true
 	}
 
-	foundProcess := false
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			ip, err := resolver.ResolveIP(metadata.Host)
@@ -393,16 +392,20 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if !foundProcess && (alwaysFindProcess || rule.ShouldFindProcess()) {
-			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
-			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
+		
+		if !processFound && alwaysFindProcess && rule.ShouldFindProcess() {
+			processFound = true
+			
+			path, err := P.FindPackageName(metadata)
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 			} else {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
-				metadata.Uid = &uid
-				foundProcess = true
+				if procesCache != metadata.Process {
+					log.Debugln("[Process] %s from process %s", metadata.String(), path)
+				}
+				procesCache = metadata.Process
 			}
 		}
 
