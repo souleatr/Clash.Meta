@@ -53,7 +53,6 @@ type General struct {
 	TCPConcurrent bool         `json:"tcp-concurrent"`
 	EnableProcess bool         `json:"enable-process"`
 	Sniffing      bool         `json:"sniffing"`
-	EBpf          EBpf         `json:"-"`
 }
 
 // Inbound config
@@ -66,7 +65,6 @@ type Inbound struct {
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
-	InboundTfo     bool     `json:"inbound-tfo"`
 }
 
 // Controller config
@@ -219,12 +217,6 @@ type RawSniffer struct {
 	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
 }
 
-// EBpf config
-type EBpf struct {
-	RedirectToTun []string `yaml:"redirect-to-tun" json:"redirect-to-tun"`
-	AutoRedir     []string `yaml:"auto-redir" json:"auto-redir"`
-}
-
 var (
 	GroupsList             = list.New()
 	ProxiesList            = list.New()
@@ -244,22 +236,21 @@ func Parse(buf []byte) (*Config, error) {
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with default value
 	rawCfg := &RawConfig{
-		AllowLan:       true,
+		AllowLan:       false,
 		BindAddress:    "*",
 		IPv6:           true,
 		Mode:           T.Rule,
 		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
-		UnifiedDelay:   true,
+		UnifiedDelay:   false,
 		Authentication: []string{},
-		LogLevel:       log.SILENT,
+		LogLevel:       log.INFO,
 		Hosts:          map[string]string{},
 		Rule:           []string{},
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
 		TCPConcurrent:  false,
 		EnableProcess:  false,
-
 		DNS: RawDNS{
 			Enable:       true,
 			IPv6:         false,
@@ -268,7 +259,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			FakeIPRange:  "28.0.0.0/8",
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:     false,
-				GeoIPCode: "",
+				GeoIPCode: "ID",
 				IPCIDR:    []string{},
 				GeoSite:   []string{},
 			},
@@ -278,9 +269,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			},
 			NameServer: []string{
 				"8.8.8.8",
-			},
-			FakeIPFilter: []string{
-				"networktest.twilio.com",
 			},
 			FakeIPFilter: []string{},
 		},
@@ -372,7 +360,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
 		}
 	}
-	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
+
 	return &General{
 		Inbound: Inbound{
 			Port:        cfg.Port,
@@ -382,7 +370,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			MixedPort:   cfg.MixedPort,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
-			InboundTfo:  cfg.InboundTfo,
 		},
 		Controller: Controller{
 			ExternalController: cfg.ExternalController,
@@ -399,7 +386,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
 		EnableProcess: cfg.EnableProcess,
-		EBpf:          cfg.EBpf,
 	}, nil
 }
 
@@ -625,8 +611,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		var addr, dnsNetType, proxyAdapter string
-		params := map[string]string{}
+		var addr, dnsNetType string
 		switch u.Scheme {
 		case "udp":
 			addr, err = hostWithDefaultPort(u.Host, "53")
@@ -641,20 +626,6 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
-			if len(u.Fragment) != 0 {
-				for _, s := range strings.Split(u.Fragment, "&") {
-					arr := strings.Split(s, "=")
-					if len(arr) == 0 {
-						continue
-					} else if len(arr) == 1 {
-						proxyAdapter = arr[0]
-					} else if len(arr) == 2 {
-						params[arr[0]] = arr[1]
-					} else {
-						params[arr[0]] = strings.Join(arr[1:], "=")
-					}
-				}
-			}
 		case "dhcp":
 			addr = u.Host
 			dnsNetType = "dhcp" // UDP from DHCP
@@ -674,9 +645,8 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			dns.NameServer{
 				Net:          dnsNetType,
 				Addr:         addr,
-				ProxyAdapter: proxyAdapter,
+				ProxyAdapter: u.Fragment,
 				Interface:    dialer.DefaultInterface,
-				Params:       params,
 			},
 		)
 	}

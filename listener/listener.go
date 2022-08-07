@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net"
 	"strconv"
@@ -27,14 +26,12 @@ var (
 	mixedUDPLister   *socks.UDPListener
 
 	// lock for recreate function
-	socksMux     sync.Mutex
-	httpMux      sync.Mutex
-	redirMux     sync.Mutex
-	tproxyMux    sync.Mutex
-	mixedMux     sync.Mutex
-	tunMux       sync.Mutex
-	autoRedirMux sync.Mutex
-	tcMux        sync.Mutex
+	socksMux  sync.Mutex
+	httpMux   sync.Mutex
+	redirMux  sync.Mutex
+	tproxyMux sync.Mutex
+	mixedMux  sync.Mutex
+	tunMux    sync.Mutex
 )
 
 type Ports struct {
@@ -59,10 +56,6 @@ func SetAllowLan(al bool) {
 
 func SetBindAddress(host string) {
 	bindAddress = host
-}
-
-func SetInboundTfo(itfo bool) {
-	inboundTfo = itfo
 }
 
 func NewInner(tcpIn chan<- C.ConnContext) {
@@ -94,7 +87,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	httpListener, err = http.New(addr, inboundTfo, tcpIn)
+	httpListener, err = http.New(addr, tcpIn)
 	if err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
 		return
@@ -145,7 +138,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	tcpListener, err := socks.New(addr, inboundTfo, tcpIn)
+	tcpListener, err := socks.New(addr, tcpIn)
 	if err != nil {
 		return
 	}
@@ -203,7 +196,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	mixedListener, err = mixed.New(addr, inboundTfo, tcpIn)
+	mixedListener, err = mixed.New(addr, tcpIn)
 	if err != nil {
 		return
 	}

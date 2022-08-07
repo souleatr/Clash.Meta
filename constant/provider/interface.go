@@ -68,7 +68,7 @@ type ProxyProvider interface {
 	Proxies() []C.Proxy
 	Touch()
 	HealthCheck()
-	Version() uint32
+	Version() uint
 }
 
 // Rule Type

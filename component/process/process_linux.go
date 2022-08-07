@@ -39,7 +39,6 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (int32, string,
 	if err != nil {
 		return -1, "", err
 	}
-
 	pp, err := resolveProcessNameByProcSearch(inode, uid)
 	return uid, pp, err
 }
@@ -111,7 +110,7 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 		return 0, 0, fmt.Errorf("netlink message: NLMSG_ERROR")
 	}
 
-	inode, uid := unpackSocketDiagResponse(&messages[0])
+	inode, uid := unpackSocketDiagResponse(&message)
 	if inode < 0 || uid < 0 {
 		return 0, 0, fmt.Errorf("invalid inode(%d) or uid(%d)", inode, uid)
 	}
@@ -198,6 +197,7 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 			if err != nil {
 				continue
 			}
+
 			if runtime.GOOS == "android" {
 				if bytes.Equal(buffer[:n], socket) {
 					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
