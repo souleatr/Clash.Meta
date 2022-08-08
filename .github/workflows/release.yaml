@@ -26,7 +26,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Test
-        if: ${{github.ref_name=='Beta'}}
+        if: ${{github.ref_name=='master'}}
         run: |
           go test ./...
       - name: Build
