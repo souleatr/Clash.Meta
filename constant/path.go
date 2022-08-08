@@ -57,25 +57,6 @@ func (p *path) Resolve(path string) string {
 	return path
 }
 
-func (p *path) MMDB() string {
-	files, err := ioutil.ReadDir(p.homeDir)
-	if err != nil {
-		return ""
-	}
-	for _, fi := range files {
-		if fi.IsDir() {
-			// 目录则直接跳过
-			continue
-		} else {
-			if strings.EqualFold(fi.Name(), "Country.mmdb") {
-				GeoipName = fi.Name()
-				return P.Join(p.homeDir, fi.Name())
-			}
-		}
-	}
-	return P.Join(p.homeDir, "Country.mmdb")
-}
-
 func (p *path) OldCache() string {
 	return P.Join(p.homeDir, ".cache")
 }

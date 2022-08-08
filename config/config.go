@@ -49,7 +49,6 @@ type General struct {
 	IPv6          bool         `json:"ipv6"`
 	Interface     string       `json:"interface-name"`
 	RoutingMark   int          `json:"-"`
-	GeodataMode   bool         `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
 	TCPConcurrent bool         `json:"tcp-concurrent"`
 	EnableProcess bool         `json:"enable-process"`
@@ -121,13 +120,6 @@ type Tun struct {
 	TunAddressPrefix    netip.Prefix     `yaml:"-" json:"-"`
 }
 
-// IPTables config
-type IPTables struct {
-	Enable           bool     `yaml:"enable" json:"enable"`
-	InboundInterface string   `yaml:"inbound-interface" json:"inbound-interface"`
-	Bypass           []string `yaml:"bypass" json:"bypass"`
-}
-
 type Sniffer struct {
 	Enable      bool
 	Sniffers    []sniffer.Type
@@ -146,7 +138,6 @@ type Experimental struct {
 type Config struct {
 	General       *General
 	Tun           *Tun
-	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
 	Hosts         *trie.DomainTrie[netip.Addr]
@@ -213,7 +204,6 @@ type RawConfig struct {
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
 	RoutingMark        int          `yaml:"routing-mark"`
-	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	EnableProcess      bool         `yaml:"enable-process" json:"enable-process"`
@@ -225,7 +215,6 @@ type RawConfig struct {
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	EBpf          EBpf                      `yaml:"ebpf"`
-	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
 	GeoXUrl       RawGeoXUrl                `yaml:"geox-url"`
@@ -236,7 +225,6 @@ type RawConfig struct {
 
 type RawGeoXUrl struct {
 	GeoIp   string `yaml:"geoip" json:"geoip"`
-	Mmdb    string `yaml:"mmdb" json:"mmdb"`
 	GeoSite string `yaml:"geosite" json:"geosite"`
 }
 
@@ -277,7 +265,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		BindAddress:    "*",
 		IPv6:           true,
 		Mode:           T.Rule,
-		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
 		UnifiedDelay:   true,
 		Authentication: []string{},
@@ -295,11 +282,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			DNSHijack:           []string{"any:53"},
 			AutoRoute:           false,
 			AutoDetectInterface: false,
-		},
-		IPTables: IPTables{
-			Enable:           false,
-			InboundInterface: "lo",
-			Bypass:           []string{},
 		},
 		DNS: RawDNS{
 			Enable:       true,
@@ -336,7 +318,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 		GeoXUrl: RawGeoXUrl{
 			GeoIp:   "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat",
-			Mmdb:    "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb",
 			GeoSite: "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat",
 		},
 	}
@@ -354,7 +335,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	startTime := time.Now()
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
-	config.IPTables = &rawCfg.IPTables
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {
@@ -442,7 +422,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		IPv6:          cfg.IPv6,
 		Interface:     cfg.Interface,
 		RoutingMark:   cfg.RoutingMark,
-		GeodataMode:   cfg.GeodataMode,
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
 		EnableProcess: cfg.EnableProcess,

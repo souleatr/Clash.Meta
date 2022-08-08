@@ -6,7 +6,6 @@ import (
 	"github.com/Dreamacro/clash/component/geodata/router"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -39,10 +38,6 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 			ip.IsLinkLocalUnicast() ||
 			resolver.IsFakeBroadcastIP(ip)
 	}
-	if !C.GeodataMode {
-		record, _ := mmdb.Instance().Country(ip.AsSlice())
-		return strings.EqualFold(record.Country.IsoCode, g.country)
-	}
 	return g.geoIPMatcher.Match(ip.AsSlice())
 }
 
@@ -71,16 +66,6 @@ func (g *GEOIP) GetRecodeSize() int {
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) {
-	if !C.GeodataMode {
-		geoip := &GEOIP{
-			Base:        &Base{},
-			country:     country,
-			adapter:     adapter,
-			noResolveIP: noResolveIP,
-		}
-		return geoip, nil
-	}
-
 	geoIPMatcher, size, err := geodata.LoadGeoIPMatcher(country)
 	if err != nil {
 		return nil, fmt.Errorf("[GeoIP] %s", err.Error())

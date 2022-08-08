@@ -5,11 +5,8 @@ import (
 
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"strings"
 )
 
 type fallbackIPFilter interface {
@@ -23,11 +20,6 @@ type geoipFilter struct {
 var geoIPMatcher *router.GeoIPMatcher
 
 func (gf *geoipFilter) Match(ip netip.Addr) bool {
-	if !C.GeodataMode {
-		record, _ := mmdb.Instance().Country(ip.AsSlice())
-		return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
-	}
-
 	if geoIPMatcher == nil {
 		countryCode := "cn"
 		geoLoader, err := geodata.GetGeoDataLoader(geodata.LoaderName())
