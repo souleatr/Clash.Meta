@@ -1,6 +1,7 @@
-name: Build All
+name: Build All-arch
 on:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,7 +13,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v1
       - name: Build
-        run: make releases
+        run: make all-arch
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
