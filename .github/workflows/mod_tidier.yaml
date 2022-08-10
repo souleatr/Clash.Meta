@@ -2,7 +2,7 @@ name: Mod Tidier
 on:
   pull_request:
     branches:
-      - Alpha
+      - alpha
       - rm-iptables
 
 jobs:
